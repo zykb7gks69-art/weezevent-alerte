@@ -6,15 +6,16 @@ from playwright.sync_api import sync_playwright
 
 URL = "https://my.weezevent.com/la-nuit-du-droit-au-conseil-detat-2026"
 
+# Messages qui indiquent que la billetterie est complete
 MOTS_COMPLET = [
-    "complet", "épuisé", "epuise", "plus de places", "plus de billets",
-    "indisponible", "sold out", "aucune place", "aucun billet",
-    "billetterie fermée", "vente terminée", "n'est pas disponible",
+    "victime de son succès",
+    "revenir plus tard",
+    "plus de places",
+    "aucune place",
+    "billetterie fermée",
 ]
-MOTS_DISPO = [
-    "réserver", "ajouter", "valider", "commander", "obtenir",
-    "s'inscrire", "choisir", "quantité", "continuer",
-]
+# Elements presents quand le module de billetterie est bien charge
+MOTS_WIDGET = ["panier", "coordonnées"]
 
 
 def main():
@@ -37,13 +38,13 @@ def main():
 
     texte = "\n".join(morceaux).lower()
     complet = any(m in texte for m in MOTS_COMPLET)
-    dispo = any(m in texte for m in MOTS_DISPO)
+    widget_charge = all(m in texte for m in MOTS_WIDGET)
 
     print("----- TEXTE VU -----")
-    print(texte[:2000])
-    print(f"---- complet={complet} dispo={dispo} ----")
+    print(texte[-1500:])
+    print(f"---- complet={complet} widget_charge={widget_charge} ----")
 
-    if texte.strip() and not complet and dispo:
+    if widget_charge and not complet:
         requests.post(
             f"https://ntfy.sh/{topic}",
             data="Une place semble disponible à la Nuit du Droit !".encode("utf-8"),
@@ -53,7 +54,7 @@ def main():
         )
         print("Notification envoyée")
     else:
-        print("Toujours complet")
+        print("Toujours complet (ou module non charge)")
 
 
 if __name__ == "__main__":
