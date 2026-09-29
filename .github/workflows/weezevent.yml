@@ -1,0 +1,64 @@
+#!/usr/bin/env python3
+"""Une seule vérification de la billetterie (conçu pour GitHub Actions).
+Le topic ntfy est lu dans la variable d'environnement NTFY_TOPIC."""
+import os
+import sys
+
+import requests
+from playwright.sync_api import sync_playwright
+
+URL = "https://my.weezevent.com/la-nuit-du-droit-au-conseil-detat-2026"
+
+MOTS_COMPLET = [
+    "complet", "épuisé", "epuise", "plus de places", "plus de billets",
+    "indisponible", "sold out", "aucune place", "aucun billet",
+    "billetterie fermée", "vente terminée", "n'est pas disponible",
+]
+MOTS_DISPO = [
+    "réserver", "ajouter", "valider", "commander", "obtenir",
+    "s'inscrire", "choisir", "quantité", "continuer",
+]
+
+
+def main():
+    topic = os.environ.get("NTFY_TOPIC")
+    if not topic:
+        sys.exit("Variable NTFY_TOPIC manquante")
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page(locale="fr-FR")
+        page.goto(URL, wait_until="networkidle", timeout=60000)
+        page.wait_for_timeout(4000)
+        morceaux = []
+        for frame in page.frames:
+            try:
+                morceaux.append(frame.inner_text("body"))
+            except Exception:
+                pass
+        browser.close()
+
+    texte = "\n".join(morceaux).lower()
+    complet = any(m in texte for m in MOTS_COMPLET)
+    dispo = any(m in texte for m in MOTS_DISPO)
+
+    # Affiché dans les logs GitHub : utile pour calibrer les mots-clés
+    print("----- TEXTE VU -----")
+    print(texte[:2000])
+    print(f"---- complet={complet} dispo={dispo} ----")
+
+    if texte.strip() and not complet and dispo:
+        requests.post(
+            f"https://ntfy.sh/{topic}",
+            data="Une place semble disponible à la Nuit du Droit !".encode("utf-8"),
+            headers={"Title": "Place dispo !", "Priority": "urgent",
+                     "Tags": "ticket", "Click": URL},
+            timeout=15,
+        )
+        print("Notification envoyée")
+    else:
+        print("Toujours complet")
+
+
+if __name__ == "__main__":
+    main()
